@@ -1,0 +1,34 @@
+{
+    "credentials": {
+        "username": "Admin",
+        "password": "admin123"
+    },
+    "roles": [
+        "Admin",
+        "ESS"
+    ],
+    "statuses": [
+        "Enabled",
+        "Disabled"
+    ],
+    "mandatoryFieldLabels": [
+        "User Role",
+        "Employee Name",
+        "Status",
+        "Username",
+        "Password",
+        "Confirm Password"
+    ],
+      "validationMessages": {
+    "required": "Required",
+    "confirmPasswordRequired": "Passwords do not match",
+    "minUsername": "Should be at least 5 characters",
+    "duplicateUsername": "Already exists",
+    "invalidEmployee": "Invalid",
+    "minPassword": "Should have at least 7 characters",
+    "missingLowercasePassword": "Your password must contain minimum 1 lower-case letter",
+    "missingNumberPassword": "Your password must contain minimum 1 number",
+    "passwordMismatch": "Passwords do not match"
+  }
+
+}
