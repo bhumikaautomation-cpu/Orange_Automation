@@ -8,6 +8,7 @@ export class PlaywrightActions {
         this.page = page;
     }
 
+    // open website
     async openWebsite(url: string): Promise<void> {
         await this.page.goto(url);
     }
