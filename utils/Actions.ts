@@ -10,8 +10,12 @@ export class PlaywrightActions {
 
     // open website
     async openWebsite(url: string): Promise<void> {
-        await this.page.goto(url);
+        await this.page.goto(url, {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000,
+        });
     }
+
 
     findLocator(locatorValue: string): Locator {
         return this.page.locator(locatorValue);

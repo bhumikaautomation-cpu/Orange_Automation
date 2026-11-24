@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 export class WaitUtils {
     page: Page;
@@ -11,9 +11,9 @@ export class WaitUtils {
         await locator.waitFor({ state: 'visible', timeout });
     }
 
-    static async waitForHidden(locator: Locator, timeout = 15000) {
-        for (const item of await locator.all()) await item.waitFor({ state: 'hidden', timeout });
-    }
+ static async waitForHidden(locator: Locator, timeout = 15000) {
+    await expect(locator.filter({ visible: true })).toHaveCount(0, { timeout });
+}
 
     static async waitForDropdownVisible(dropdownContainer: Locator, timeout = 15000) {
         await dropdownContainer.waitFor({ state: 'visible', timeout });
