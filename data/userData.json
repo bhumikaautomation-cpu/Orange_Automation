@@ -3,14 +3,14 @@
         "username": "Admin",
         "password": "admin123"
     },
-    "roles": [
-        "Admin",
-        "ESS"
-    ],
-    "statuses": [
-        "Enabled",
-        "Disabled"
-    ],
+    "roles": {
+    "admin": "Admin",
+    "ess": "ESS"
+  },
+  "statuses": {
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
     "mandatoryFieldLabels": [
         "User Role",
         "Employee Name",

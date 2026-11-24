@@ -7,15 +7,15 @@ export class WaitUtils {
         this.page = page;
     }
 
-    static async waitForVisible(locator: Locator, timeout = 15000) {
-        await locator.waitFor({ state: 'visible', timeout });
+    static async waitForVisible(locator: Locator) {
+        await locator.waitFor({ state: 'visible' });
     }
 
- static async waitForHidden(locator: Locator, timeout = 15000) {
-    await expect(locator.filter({ visible: true })).toHaveCount(0, { timeout });
-}
+    static async waitForHidden(locator: Locator) {
+        await expect(locator.filter({ visible: true })).toHaveCount(0);
+    }
 
-    static async waitForDropdownVisible(dropdownContainer: Locator, timeout = 15000) {
-        await dropdownContainer.waitFor({ state: 'visible', timeout });
+    static async waitForDropdownVisible(dropdownContainer: Locator) {
+        await dropdownContainer.waitFor({ state: 'visible' });
     }
 }
