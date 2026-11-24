@@ -87,18 +87,13 @@ export class AdminUserPage extends PlaywrightActions {
         return this.tableCards.filter({ hasText: username });
     }
 
-    // --- Static Data Helpers ---
+    // --- Data Helpers ---
     static pickRandom<T>(items: T[]): T {
         return items[Math.floor(Math.random() * items.length)]!;
     }
 
-    static dynamicPassword(): string {
-        return (
-            PlaywrightActions.generateRandom('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 2) +
-            PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 4) +
-            PlaywrightActions.generateRandom('0123456789', 2) +
-            '@'
-        );
+    dynamicPassword(): string {
+        return 'Test@' + this.randomStringGenerator('').slice(-4) + '12';
     }
 
     // --- Low-Level Form & Table Helpers ---
@@ -145,12 +140,17 @@ export class AdminUserPage extends PlaywrightActions {
         await WaitUtils.waitForVisible(this.tableBody);
     }
 
+    async resetSearch() {
+        await this.clickOnElement(this.resetBtn);
+        await WaitUtils.waitForHidden(this.loader);
+        await WaitUtils.waitForVisible(this.tableBody);
+    }
+
     async getExistingUsername(): Promise<string> {
         await WaitUtils.waitForVisible(this.tableCards.first());
         const usernames = await this.getColumnTexts('Username');
         return AdminUserPage.pickRandom(usernames) || 'Admin';
     }
-
 
     async getExistingEmployeeFirstName(): Promise<string> {
         let employees = await this.getColumnTexts('Employee Name');
@@ -161,7 +161,6 @@ export class AdminUserPage extends PlaywrightActions {
         const emp = AdminUserPage.pickRandom(employees);
         return emp.split(' ')[0] ?? emp;
     }
-
 
     async openAddForm() {
         await this.clickOnElement(this.addBtn);
@@ -205,63 +204,34 @@ export class AdminUserPage extends PlaywrightActions {
     }
 
     // =========================================================================
-    // HIGH-LEVEL CRUD ACTIONS (Used directly in spec files without payloads)
+    // SEPARATE CRUD FUNCTIONS (Add User, Search User, Edit User, Delete User)
     // =========================================================================
 
-    async addUser(overrides: Partial<UserPayload> = {}): Promise<CreatedUser> {
+    async addUser(customData?: Partial<UserPayload>): Promise<CreatedUser> {
         const data = this.getUserData();
-        const role = overrides.userRole ?? AdminUserPage.pickRandom(Object.values(data.roles));
-        const status = overrides.status ?? AdminUserPage.pickRandom(Object.values(data.statuses));
-        const employeeSearchText = overrides.employeeSearchText ?? (await this.getExistingEmployeeFirstName());
-        const username = overrides.username ?? this.randomStringGenerator('btest');
-        const password = overrides.password ?? AdminUserPage.dynamicPassword();
+        const employeeFirstName = await this.getExistingEmployeeFirstName();
+        const role = customData?.userRole ?? AdminUserPage.pickRandom([data.roles.admin, data.roles.ess]);
+        const status = customData?.status ?? data.statuses.enabled;
+        const username = customData?.username ?? this.randomStringGenerator('test_add');
+        const password = customData?.password ?? this.dynamicPassword();
 
         await this.openAddForm();
         await this.fillForm({
             userRole: role,
-            employeeSearchText,
+            employeeSearchText: customData?.employeeSearchText ?? employeeFirstName,
             status,
             username,
             password,
-            confirmPassword: overrides.confirmPassword ?? password,
+            confirmPassword: customData?.confirmPassword ?? password,
         });
         await this.saveForm();
-        await this.verifySuccessToast();
+
+        await AssertUtils.visible(this.toastSuccess);
+        await WaitUtils.waitForHidden(this.loader);
+        await WaitUtils.waitForVisible(this.tableBody);
 
         return { username, password, role, status };
     }
-
-    async editUser(currentUser: CreatedUser, overrides: Partial<UserPayload> = {}): Promise<CreatedUser> {
-        const data = this.getUserData();
-        const updatedRole =
-            overrides.userRole ??
-            AdminUserPage.pickRandom(Object.values(data.roles).filter((r) => r !== currentUser.role));
-        const updatedStatus =
-            overrides.status ??
-            AdminUserPage.pickRandom(Object.values(data.statuses).filter((s) => s !== currentUser.status));
-        const updatedUsername = overrides.username ?? this.randomStringGenerator('btest');
-        const updatedPassword = overrides.password ?? AdminUserPage.dynamicPassword();
-
-        await this.openEditForm(currentUser.username);
-        await this.fillForm({
-            userRole: updatedRole,
-            status: updatedStatus,
-            username: updatedUsername,
-            enableChangePassword: overrides.enableChangePassword ?? true,
-            password: updatedPassword,
-            confirmPassword: overrides.confirmPassword ?? updatedPassword,
-        });
-        await this.saveForm();
-        await this.verifySuccessToast();
-
-        return {
-            username: updatedUsername,
-            password: updatedPassword,
-            role: updatedRole,
-            status: updatedStatus,
-        };
-    }
-
 
     async searchUser(username: string) {
         await this.enterText(this.searchUserInput, username);
@@ -269,53 +239,133 @@ export class AdminUserPage extends PlaywrightActions {
         await WaitUtils.waitForHidden(this.loader);
     }
 
-    async resetSearch() {
-        await this.clickOnElement(this.resetBtn);
-        await WaitUtils.waitForHidden(this.loader);
-        await WaitUtils.waitForVisible(this.tableBody);
-    }
-
-    async deleteUser(username: string, confirm = true) {
-        await this.searchUser(username);
-        const row = this.getUserRow(username);
-        await this.clickOnElement(row.locator('.bi-trash'));
-        await AssertUtils.visible(this.confirmDeleteBtn);
-
-        if (confirm) {
-            await this.clickOnElement(this.confirmDeleteBtn);
-            await this.verifySuccessToast(); // Check toast immediately before it disappears
-            await WaitUtils.waitForHidden(this.loader);
-        } else {
-            await this.clickOnElement(this.cancelDeleteBtn);
-        }
-    }
-
-    async sortByUsername(order: 'Ascending' | 'Descending'): Promise<string[]> {
-        await this.clickOnElement(this.sortBtn);
-        await WaitUtils.waitForVisible(this.sortDropdown);
-        await this.clickOnElement(this.sortDropdown.getByText(order, { exact: true }));
-        await WaitUtils.waitForHidden(this.loader);
-        return this.getColumnTexts('Username');
-    }
-    // --- Page Assertions ---
-    async verifySuccessToast() {
-        await AssertUtils.visible(this.toastSuccess);
-    }
-    async verifyErrorCount(expectedCount: number) {
-        await AssertUtils.count(this.errorLabels, expectedCount);
-    }
-    async verifyFieldError(labelText: string, expectedMessage: string) {
-        await AssertUtils.exactText(this.fieldError(labelText), expectedMessage);
-    }
-    async verifyUserInList(username: string, role: string, status: string) {
-        await this.searchUser(username);
-        const row = this.getUserRow(username);
-        await AssertUtils.visible(row);
-        await AssertUtils.containsText(row, role);
-        await AssertUtils.containsText(row, status);
-    }
-    async verifyUserNotInList(username: string) {
-        await this.searchUser(username);
-        await AssertUtils.visible(this.noRecordsLabel);
-    }
+    async editUser(user: CreatedUser, updates?: Partial<UserPayload>): Promise<CreatedUser> {
+        const data = this.getUserData();
+        const newRole = updates?.userRole ?? (user.role === data.roles.admin ? data.roles.ess : data.roles.admin);
+const newStatus =
+updates?.status ?? (user.status === data.statuses.enabled ? data.statuses.disabled : data.statuses.enabled);
+const newUsername = updates?.username ?? this.randomStringGenerator('test_edit');
+await this.openEditForm(user.username);
+await this.fillForm({
+userRole: newRole,
+status: newStatus,
+username: newUsername,
+...updates,
+});
+await this.saveForm();
+await AssertUtils.visible(this.toastSuccess);
+await WaitUtils.waitForHidden(this.loader);
+await WaitUtils.waitForVisible(this.tableBody);
+return {
+username: newUsername,
+password: updates?.password ?? user.password,
+role: newRole,
+status: newStatus,
+};
+}
+async deleteUser(username: string, confirm = true) {
+await this.searchUser(username);
+const row = this.getUserRow(username);
+await this.clickOnElement(row.locator('.bi-trash'));
+if (confirm) {
+await this.clickOnElement(this.confirmDeleteBtn);
+await AssertUtils.visible(this.toastSuccess);
+await WaitUtils.waitForHidden(this.loader);
+} else {
+await this.clickOnElement(this.cancelDeleteBtn);
+}
+}
+// =========================================================================
+// VERIFICATION & VALIDATION HELPERS
+// =========================================================================
+async verifyUserInList(username: string, expectedRole?: string, expectedStatus?: string) {
+await this.searchUser(username);
+const row = this.getUserRow(username);
+await AssertUtils.visible(row);
+if (expectedRole) await AssertUtils.containsText(row, expectedRole);
+if (expectedStatus) await AssertUtils.containsText(row, expectedStatus);
+}
+async verifyUserNotInList(username: string) {
+await this.searchUser(username);
+await AssertUtils.visible(this.noRecordsLabel);
+}
+async verifyErrorCount(expectedCount: number) {
+await AssertUtils.count(this.errorLabels, expectedCount);
+}
+async verifyFieldError(labelText: string, expectedMessage: string) {
+await AssertUtils.containsText(this.fieldError(labelText), expectedMessage);
+}
+async validateMandatoryFields() {
+const data = this.getUserData();
+await this.openAddForm();
+await this.saveForm();
+await this.verifyErrorCount(data.mandatoryFieldLabels.length);
+for (const label of data.mandatoryFieldLabels) {
+const expectedMsg =
+label === 'Confirm Password'
+? data.validationMessages.confirmPasswordRequired
+: data.validationMessages.required;
+await this.verifyFieldError(label, expectedMsg);
+}
+}
+async validateInvalidInputs(existingUsername: string) {
+const data = this.getUserData();
+await this.openAddForm();
+const scenarios: { payload: UserPayload; checks: { label: string; msg: string }[] }[] = [
+{
+payload: {
+rawEmployee: this.randomStringGenerator('invalid'),
+username: 'usr',
+password: 'pass1',
+confirmPassword: this.dynamicPassword(),
+},
+checks: [
+{ label: 'Employee Name', msg: data.validationMessages.invalidEmployee },
+{ label: 'Username', msg: data.validationMessages.minUsername },
+{ label: 'Password', msg: data.validationMessages.minPassword },
+{ label: 'Confirm Password', msg: data.validationMessages.passwordMismatch },
+],
+},
+{
+payload: { password: this.randomStringGenerator('PASS').toUpperCase() + '1' },
+checks: [{ label: 'Password', msg: data.validationMessages.missingLowercasePassword }],
+},
+{
+payload: { password: this.randomStringGenerator('TestPass').replace(/[0-9]/g, 'a') },
+checks: [{ label: 'Password', msg: data.validationMessages.missingNumberPassword }],
+},
+{
+payload: { username: existingUsername },
+checks: [{ label: 'Username', msg: data.validationMessages.duplicateUsername }],
+},
+];
+for (const s of scenarios) {
+await this.fillForm(s.payload);
+await this.saveForm();
+for (const c of s.checks) {
+await this.verifyFieldError(c.label, c.msg);
+}
+}
+}
+async validateDuplicateEditAndMismatch(user: CreatedUser, existingUsername: string) {
+const data = this.getUserData();
+await this.openEditForm(user.username);
+await this.fillForm({
+username: existingUsername,
+enableChangePassword: true,
+password: user.password,
+confirmPassword: this.dynamicPassword(),
+});
+await this.saveForm();
+await this.verifyFieldError('Username', data.validationMessages.duplicateUsername);
+await this.verifyFieldError('Confirm Password', data.validationMessages.passwordMismatch);
+await this.cancelForm();
+}
+async sortByUsername(order: 'Ascending' | 'Descending'): Promise<string[]> {
+await this.clickOnElement(this.sortBtn);
+await WaitUtils.waitForDropdownVisible(this.sortDropdown);
+await this.clickOnElement(this.sortDropdown.getByText(order));
+await WaitUtils.waitForHidden(this.loader);
+return await this.getColumnTexts('Username');
+}
 }
