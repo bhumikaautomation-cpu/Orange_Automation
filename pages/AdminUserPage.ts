@@ -27,6 +27,7 @@ export class AdminUserPage extends PlaywrightActions {
   adminLink = this.page.getByRole('navigation').getByRole('link', { name: 'Admin', exact: true });
 
   // --- Search & Action Buttons ---
+  filterToggleBtn = this.page.locator('.oxd-table-filter-header-options button');
   searchUserInput = this.getInputByLabel('Username');
   searchBtn = this.page.getByRole('button', { name: 'Search' });
   resetBtn = this.page.getByRole('button', { name: 'Reset' });
@@ -117,6 +118,11 @@ export class AdminUserPage extends PlaywrightActions {
       }
     }
 
+    if (validOptions.length === 0 && searchText !== 'e') {
+      await this.selectExistingEmployee('e');
+      return;
+    }
+
     await AdminUserPage.pickRandom(validOptions).click();
   }
 
@@ -124,6 +130,8 @@ export class AdminUserPage extends PlaywrightActions {
     await WaitUtils.waitForHidden(this.loader);
     const headers = await this.page.getByRole('columnheader').allInnerTexts();
     const columnIndex = headers.findIndex((header) => header.trim().startsWith(columnName));
+
+    if (columnIndex === -1) return [];
 
     return this.tableCards.evaluateAll(
       (rows, idx) =>
@@ -144,31 +152,40 @@ export class AdminUserPage extends PlaywrightActions {
     await this.page.goto('/web/index.php/admin/viewSystemUsers');
     await WaitUtils.waitForHidden(this.loader);
     await WaitUtils.waitForVisible(this.tableBody);
+    await expect(this.tableCards.first().or(this.noRecordsLabel)).toBeVisible();
+  }
+
+  async ensureOnListPage() {
+    await WaitUtils.waitForHidden(this.loader);
+    if (!this.page.url().includes('/admin/viewSystemUsers') || !(await this.addBtn.isVisible())) {
+      await this.openDirect();
+    }
+  }
+
+  async ensureSearchFiltersExpanded() {
+    await this.ensureOnListPage();
+    if (!(await this.searchUserInput.isVisible())) {
+      await this.clickOnElement(this.filterToggleBtn);
+      await WaitUtils.waitForVisible(this.searchUserInput);
+    }
   }
 
   async resetSearch() {
+    await this.ensureSearchFiltersExpanded();
     await this.clickOnElement(this.resetBtn);
     await WaitUtils.waitForHidden(this.loader);
-    await WaitUtils.waitForVisible(this.tableBody);
+    await expect(this.tableCards.first().or(this.noRecordsLabel)).toBeVisible();
   }
 
   async getExistingUsername(): Promise<string> {
+    await this.ensureOnListPage();
     await WaitUtils.waitForVisible(this.tableCards.first());
     const usernames = await this.getColumnTexts('Username');
     return AdminUserPage.pickRandom(usernames) || 'Admin';
   }
 
-  async getExistingEmployeeFirstName(): Promise<string> {
-    let employees = await this.getColumnTexts('Employee Name');
-    if (employees.length === 0) {
-      await this.resetSearch();
-      employees = await this.getColumnTexts('Employee Name');
-    }
-    const emp = AdminUserPage.pickRandom(employees);
-    return emp.split(' ')[0] ?? emp;
-  }
-
   async openAddForm() {
+    await this.ensureOnListPage();
     await this.clickOnElement(this.addBtn);
     await WaitUtils.waitForHidden(this.loader);
     await AssertUtils.visible(this.saveBtn);
@@ -180,7 +197,6 @@ export class AdminUserPage extends PlaywrightActions {
     await this.clickOnElement(row.locator('.bi-pencil-fill'));
     await WaitUtils.waitForHidden(this.loader);
     await AssertUtils.visible(this.saveBtn);
-    // Wait until OrangeHRM finishes loading the existing username into the input field
     await expect(this.usernameInput).toHaveValue(username);
   }
 
@@ -216,7 +232,6 @@ export class AdminUserPage extends PlaywrightActions {
 
   async addUser(customData?: Partial<UserPayload>): Promise<CreatedUser> {
     const data = this.getUserData();
-    const employeeFirstName = await this.getExistingEmployeeFirstName();
     const role = customData?.userRole ?? AdminUserPage.pickRandom([data.roles.admin, data.roles.ess]);
     const status = customData?.status ?? data.statuses.enabled;
     const username = customData?.username ?? this.randomStringGenerator('test_add');
@@ -225,7 +240,7 @@ export class AdminUserPage extends PlaywrightActions {
     await this.openAddForm();
     await this.fillForm({
       userRole: role,
-      employeeSearchText: customData?.employeeSearchText ?? employeeFirstName,
+      employeeSearchText: customData?.employeeSearchText ?? 'a',
       status,
       username,
       password,
@@ -241,20 +256,20 @@ export class AdminUserPage extends PlaywrightActions {
   }
 
   async searchUser(username: string) {
+    await this.ensureSearchFiltersExpanded();
     await this.enterText(this.searchUserInput, username);
     await this.clickOnElement(this.searchBtn);
     await WaitUtils.waitForHidden(this.loader);
   }
 
   async editUser(user: CreatedUser, updates?: Partial<UserPayload>): Promise<CreatedUser> {
-    const data = this.getUserData();
-    const newRole = updates?.userRole ?? (user.role === data.roles.admin ? data.roles.ess : data.roles.admin);
-    const newStatus =
-      updates?.status ?? (user.status === data.statuses.enabled ? data.statuses.disabled : data.statuses.enabled);
-    const newUsername = updates?.username ?? this.randomStringGenerator('test_edit');
-
-    await this.openEditForm(user.username);
-    await this.fillForm({
+const data = this.getUserData();
+const newRole = updates?.userRole ?? (user.role === data.roles.admin ? data.roles.ess : data.roles.admin);
+const newStatus =
+updates?.status ?? (user.status === data.statuses.enabled ? data.statuses.disabled : data.statuses.enabled);
+const newUsername = updates?.username ?? this.randomStringGenerator('test_edit');
+await this.openEditForm(user.username);
+await this.fillForm({
 userRole: newRole,
 status: newStatus,
 username: newUsername,
@@ -306,6 +321,11 @@ await AssertUtils.containsText(this.fieldError(labelText), expectedMessage);
 async validateMandatoryFields() {
 const data = this.getUserData();
 await this.openAddForm();
+await this.passwordInput.fill('a');
+await this.passwordInput.fill('');
+await this.confirmInput.fill('a');
+await this.confirmInput.fill('');
+await this.confirmInput.blur();
 await this.saveForm();
 await this.verifyErrorCount(data.mandatoryFieldLabels.length);
 for (const label of data.mandatoryFieldLabels) {
@@ -378,6 +398,7 @@ await WaitUtils.waitForHidden(this.loader);
 return await this.getColumnTexts('Username');
 }
 async sortByUsername(order: SortDirection): Promise<string[]> {
+await this.ensureOnListPage();
 const currentUsernames = await this.getColumnTexts('Username');
 if (AssertUtils.isSorted(currentUsernames, order)) {
 const oppositeOrder: SortDirection = order === 'Ascending' ? 'Descending' : 'Ascending';

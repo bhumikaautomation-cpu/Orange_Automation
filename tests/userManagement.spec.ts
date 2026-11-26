@@ -7,10 +7,11 @@ import { AssertUtils, SortDirection } from '../utils/AssertUtils';
 type SavedAuthState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
 test.describe('OrangeHRM Admin User Management', () => {
+  test.describe.configure({ mode: 'serial' });
+
   let authState: SavedAuthState;
 
-  // 1. Logs in ONCE before all tests and saves the session in memory (no extra file needed)
-   // 1. Logs in ONCE before all tests and saves the session in memory
+  // 1. Logs in ONCE before all tests and saves the session in memory
   test.beforeAll(async ({ browser, baseURL }) => {
     const context = await browser.newContext({
       baseURL,
@@ -26,7 +27,6 @@ test.describe('OrangeHRM Admin User Management', () => {
     authState = await context.storageState();
     await context.close();
   });
-
 
   // 2. Reuses the saved session for every test automatically
   test.use({

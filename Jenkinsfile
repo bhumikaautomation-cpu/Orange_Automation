@@ -1,6 +1,7 @@
 pipeline {
     agent {
         docker {
+           
             image '://microsoft.com'
             args '--init --ipc=host -u root'
             reuseNode true
