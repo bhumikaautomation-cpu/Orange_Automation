@@ -27,12 +27,16 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['junit', { outputFile: 'test-results/junit-report.xml' }]
+  ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
 
   use: {
     baseURL: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login',
-    headless: false,
+    headless: true,
     actionTimeout: 15000,
     navigationTimeout: 30000,
     deviceScaleFactor: undefined,
@@ -42,19 +46,19 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+   projects: [
     {
-      name: 'Google Chrome',  
-
-      use: { 
+      name: 'chromium',
+      use: {
         ...devices['Desktop Chrome'],
-        channel: 'chrome',
-      viewport: null,
-       deviceScaleFactor: undefined,
-    launchOptions: {
-      args: ['--start-maximized'],
-    } },
+        // Uses bundled Chromium in Docker/CI, and branded Chrome locally
+        channel: process.env.CI ? undefined : 'chrome',
+        viewport: process.env.CI ? { width: 1920, height: 1080 } : null,
+        deviceScaleFactor: undefined,
+        launchOptions: {
+          args: process.env.CI ? [] : ['--start-maximized'],
+        },
+      },
     },
-
-  ]
+  ],
 });
