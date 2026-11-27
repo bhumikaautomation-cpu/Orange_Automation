@@ -13,25 +13,30 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  timeout: 60000,
+  timeout: 70000, 
   expect: {
-    timeout: 10000,
+    timeout: 12000,
   },
   /* Run tests in files in parallel */
-  fullyParallel: true,
+  fullyParallel: false,
+
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['junit', { outputFile: 'test-results/junit-report.xml' }]
+  ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
 
   use: {
     baseURL: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login',
-    headless: false,
+    headless: true,
     actionTimeout: 15000,
     navigationTimeout: 30000,
     deviceScaleFactor: undefined,
@@ -41,19 +46,16 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
-  projects: [
+     projects: [
     {
-      name: 'Google Chrome',  
-
-      use: { 
+      name: 'chromium',
+      use: {
         ...devices['Desktop Chrome'],
-        channel: 'chrome',
-      viewport: null,
-       deviceScaleFactor: undefined,
-    launchOptions: {
-      args: ['--start-maximized'],
-    } },
+        channel: process.env.CI ? undefined : 'chrome',
+        viewport: { width: 1920, height: 1080 },
+        deviceScaleFactor: undefined,
+      },
     },
+  ],
 
-  ]
 });
