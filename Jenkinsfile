@@ -1,5 +1,5 @@
 def REGISTRY = 'mcr.microsoft.com'
-def IMAGE_TAG = 'playwright:v1.58.2-noble'
+def IMAGE_TAG = 'playwright:v1.65.1-noble'
 
 pipeline {
     agent {
