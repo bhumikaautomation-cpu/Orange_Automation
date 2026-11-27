@@ -7,9 +7,10 @@ export class WaitUtils {
         this.page = page;
     }
 
-    static async waitForVisible(locator: Locator) {
-        await locator.waitFor({ state: 'visible' });
+    static async waitForVisible(locator: Locator, timeout?: number) {
+        await locator.waitFor({ state: 'visible', timeout });
     }
+
 
     static async waitForHidden(locator: Locator) {
         await expect(locator.filter({ visible: true })).toHaveCount(0);
