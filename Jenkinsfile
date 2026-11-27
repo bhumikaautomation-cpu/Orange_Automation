@@ -1,4 +1,4 @@
-def REGISTRY = '://microsoft.com'
+def REGISTRY = 'mcr.microsoft.com'
 def IMAGE_TAG = 'playwright:v1.58.2-noble'
 
 pipeline {
@@ -6,7 +6,6 @@ pipeline {
         docker {
             image "${REGISTRY}/${IMAGE_TAG}"
             args '--init --ipc=host -u root'
-            reuseNode true
         }
     }
 
@@ -62,26 +61,25 @@ pipeline {
                     }
                 }
             }
-        }
-    }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'test-results/junit-report.xml'
 
-    post {
-        always {
-            junit allowEmptyResults: true, testResults: 'test-results/junit-report.xml'
+                    publishHTML(target: [
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Playwright HTML Report'
+                    ])
 
-            publishHTML(target: [
-                allowMissing: true,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: 'playwright-report',
-                reportFiles: 'index.html',
-                reportName: 'Playwright HTML Report'
-            ])
-
-            archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
-        }
-        cleanup {
-            sh 'chmod -R 777 test-results playwright-report || true'
+                    archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
+                }
+                cleanup {
+                    sh 'chmod -R 777 test-results playwright-report || true'
+                }
+            }
         }
     }
 }
