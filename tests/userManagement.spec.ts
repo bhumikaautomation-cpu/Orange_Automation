@@ -3,6 +3,7 @@ import { test } from '../fixtures/baseFixtures';
 import { CreatedUser } from '../pages/AdminUserPage';
 import { LoginPage } from '../pages/LoginPage';
 import { AssertUtils, SortDirection } from '../utils/AssertUtils';
+import { PlaywrightActions } from '../utils/Actions';
 
 type SavedAuthState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
@@ -15,13 +16,13 @@ test.describe('OrangeHRM Admin User Management', () => {
   test.beforeAll(async ({ browser, baseURL }) => {
     const context = await browser.newContext({
       baseURL,
-      storageState: undefined, // Ensures a clean logged-out context for initial login
+      storageState: undefined,
     });
     const page = await context.newPage();
     const loginPage = new LoginPage(page);
 
     const data = loginPage.getUserData();
-    await page.goto('/web/index.php/auth/login', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await loginPage.openWebsite('/');
     await loginPage.login(data.credentials.username, data.credentials.password);
 
     authState = await context.storageState();
@@ -30,16 +31,15 @@ test.describe('OrangeHRM Admin User Management', () => {
 
   // 2. Reuses the saved session for every test automatically
   test.use({
-    storageState: async ({}, use) => {
+    storageState: async ({ }, use) => {
       await use(authState);
     },
   });
 
-  // 3. Navigates straight to the Admin Users table without calling loginPage.open()
+  // 3. Opens baseURL (auto-redirects to Dashboard) and clicks Admin step-by-step
   test.beforeEach(async ({ adminUserPage }) => {
-    await adminUserPage.openDirect();
+    await adminUserPage.navigate();
   });
-
   // =========================================================================
   // NEGATIVE FIELD VALIDATIONS (TC01 - TC02)
   // =========================================================================
@@ -86,9 +86,7 @@ test.describe('OrangeHRM Admin User Management', () => {
   // =========================================================================
 
   test('TC07 [Positive] - Sort Username Ascending & Descending', async ({ adminUserPage, page }) => {
-    test.setTimeout(120_000);
-
-    const suffix = adminUserPage.randomStringGenerator('').slice(-4);
+    const suffix = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 4);
     const mixedUsernames = [
       `_123alpha_${suffix}`, // Special char (_) + numbers + alphabet
       `99_beta_${suffix}`,   // Numbers + special char (_) + alphabet
@@ -126,14 +124,15 @@ test.describe('OrangeHRM Admin User Management', () => {
     adminUserPage,
     page,
   }) => {
-    test.setTimeout(120_000);
-
     const existingUser = 'Admin';
     const user = await adminUserPage.addUser();
 
     try {
       // 1. [Search - Negative] Search non-existent username -> "No Records Found"
-      await adminUserPage.verifyUserNotInList(adminUserPage.randomStringGenerator('ghost'));
+      const nonExistentUser = `ghost_${PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 5)}`;
+      await adminUserPage.verifyUserNotInList(nonExistentUser);
+
+
 
       // 2. [Edit - Negative] Duplicate username & password mismatch -> Cancel changes
       await adminUserPage.validateDuplicateEditAndMismatch(user, existingUser);

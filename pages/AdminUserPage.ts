@@ -22,23 +22,42 @@ export interface CreatedUser {
 }
 
 export class AdminUserPage extends PlaywrightActions {
+  // --- Stored Dynamic State ---
+  private _generatedPassword: string = '';
+
   // --- Navigation & Loaders ---
   loader = this.page.locator('.oxd-loading-spinner');
   adminLink = this.page.getByRole('navigation').getByRole('link', { name: 'Admin', exact: true });
 
+  // --- Dynamic Field & Row Locators ---
+  fieldContainer = (labelText: string) =>
+    this.page.locator('.oxd-input-group').filter({
+      has: this.page.locator('label', { hasText: new RegExp(`^${labelText}$`) }),
+    });
+  inputByLabel = (labelText: string) => this.fieldContainer(labelText).locator('input');
+  dropdownByLabel = (labelText: string) => this.fieldContainer(labelText).locator('.oxd-select-text');
+  fieldError = (labelText: string) => this.fieldContainer(labelText).locator('.oxd-input-field-error-message');
+  userRow = (username: string) => this.tableCards.filter({ hasText: username });
+  editRowBtn = (username: string) => this.userRow(username).locator('.bi-pencil-fill');
+  deleteRowBtn = (username: string) => this.userRow(username).locator('.bi-trash');
+  dropdownOption = (optionText: string) => this.page.getByRole('option', { name: optionText, exact: true });
+
   // --- Search & Action Buttons ---
   filterToggleBtn = this.page.locator('.oxd-table-filter-header-options button');
-  searchUserInput = this.getInputByLabel('Username');
+  searchUserInput = this.inputByLabel('Username');
   searchBtn = this.page.getByRole('button', { name: 'Search' });
   resetBtn = this.page.getByRole('button', { name: 'Reset' });
   addBtn = this.page.getByRole('button', { name: 'Add' });
 
-  // --- System Users Table & Sorting ---
-  tableBody = this.page.locator('.oxd-table-body');
+  // --- System Users Table & Sorting (Scoped to table container) ---
+  usersTable = this.page.locator('.oxd-table');
+  tableHeaders = this.usersTable.getByRole('columnheader');
+  tableBody = this.usersTable.locator('.oxd-table-body');
   tableCards = this.tableBody.getByRole('row');
   noRecordsLabel = this.page.locator('.orangehrm-horizontal-padding').getByText('No Records Found');
-  sortBtn = this.page.getByRole('columnheader', { name: /Username/i }).locator('.oxd-table-header-sort');
+  sortBtn = this.usersTable.getByRole('columnheader', { name: /Username/i }).locator('.oxd-table-header-sort');
   sortDropdown = this.page.getByRole('menu');
+  sortOption = (order: SortDirection) => this.sortDropdown.getByText(order, { exact: true });
 
   // --- Toasts & Confirmation Dialogs ---
   toastSuccess = this.page.locator('.oxd-toast--success');
@@ -47,16 +66,16 @@ export class AdminUserPage extends PlaywrightActions {
   confirmDeleteBtn = this.page.getByRole('dialog').getByRole('button', { name: 'Yes, Delete' });
 
   // --- Add / Edit User Form ---
-  roleSelect = this.getDropdownByLabel('User Role');
-  empInput = this.getInputByLabel('Employee Name');
+  roleSelect = this.dropdownByLabel('User Role');
+  empInput = this.inputByLabel('Employee Name');
   empDropdown = this.page.getByRole('listbox');
   empOptions = this.empDropdown.getByRole('option');
   empSearching = this.empOptions.filter({ hasText: 'Searching' });
-  statusSelect = this.getDropdownByLabel('Status');
-  usernameInput = this.getInputByLabel('Username');
+  statusSelect = this.dropdownByLabel('Status');
+  usernameInput = this.inputByLabel('Username');
   changePasswordCheckbox = this.page.locator('label').filter({ hasText: 'Yes' });
-  passwordInput = this.getInputByLabel('Password');
-  confirmInput = this.getInputByLabel('Confirm Password');
+  passwordInput = this.inputByLabel('Password');
+  confirmInput = this.inputByLabel('Confirm Password');
   saveBtn = this.page.getByRole('button', { name: 'Save' });
   cancelBtn = this.page.getByRole('button', { name: 'Cancel' });
   errorLabels = this.page.locator('.oxd-input-field-error-message');
@@ -65,42 +84,24 @@ export class AdminUserPage extends PlaywrightActions {
     super(page);
   }
 
-  // --- Dynamic Locator Helpers ---
-  private getFieldContainer(labelText: string): Locator {
-    return this.page.locator('.oxd-input-group').filter({
-      has: this.page.locator('label', { hasText: new RegExp(`^${labelText}$`) }),
-    });
-  }
-
-  private getInputByLabel(labelText: string): Locator {
-    return this.getFieldContainer(labelText).locator('input');
-  }
-
-  private getDropdownByLabel(labelText: string): Locator {
-    return this.getFieldContainer(labelText).locator('.oxd-select-text');
-  }
-
-  private fieldError(labelText: string): Locator {
-    return this.getFieldContainer(labelText).locator('.oxd-input-field-error-message');
-  }
-
-  private getUserRow(username: string): Locator {
-    return this.tableCards.filter({ hasText: username });
-  }
-
-  // --- Data Helpers ---
-  static pickRandom<T>(items: T[]): T {
-    return items[Math.floor(Math.random() * items.length)]!;
-  }
-
+  /**
+   * Generates a dynamic password using PlaywrightActions.generateRandom
+   * and explicitly stores it so it can be reused anywhere later.
+   */
   dynamicPassword(): string {
-    return 'Test@' + this.randomStringGenerator('').slice(-4) + '12';
+    const randomChars = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 4);
+    this._generatedPassword = `Test@${randomChars}12`;
+    return this._generatedPassword;
+  }
+
+  get storedPassword(): string {
+    return this._generatedPassword;
   }
 
   // --- Low-Level Form & Table Helpers ---
   async selectCustomDropdown(trigger: Locator, optionText: string) {
     await this.clickOnElement(trigger);
-    const option = this.page.getByRole('option', { name: optionText, exact: true });
+    const option = this.dropdownOption(optionText);
     await WaitUtils.waitForDropdownVisible(option);
     await option.click();
   }
@@ -111,10 +112,10 @@ export class AdminUserPage extends PlaywrightActions {
     await WaitUtils.waitForDropdownVisible(this.empDropdown);
 
     const validOptions: Locator[] = [];
-    for (const opt of await this.empOptions.all()) {
-      const txt = (await opt.innerText()).trim();
-      if (txt && txt !== 'No Records Found' && !txt.includes('Searching')) {
-        validOptions.push(opt);
+    for (const option of await this.empOptions.all()) {
+      const optionText = (await option.innerText()).trim();
+      if (optionText && optionText !== 'No Records Found' && !optionText.includes('Searching')) {
+        validOptions.push(option);
       }
     }
 
@@ -123,33 +124,37 @@ export class AdminUserPage extends PlaywrightActions {
       return;
     }
 
-    await AdminUserPage.pickRandom(validOptions).click();
+    await this.pickRandom(validOptions).click();
   }
 
   async getColumnTexts(columnName: 'Username' | 'User Role' | 'Employee Name' | 'Status'): Promise<string[]> {
     await WaitUtils.waitForHidden(this.loader);
-    const headers = await this.page.getByRole('columnheader').allInnerTexts();
+    const headers = await this.tableHeaders.allInnerTexts();
     const columnIndex = headers.findIndex((header) => header.trim().startsWith(columnName));
 
     if (columnIndex === -1) return [];
 
     return this.tableCards.evaluateAll(
-      (rows, idx) =>
+      (rows, targetColumnIndex) =>
         rows
-          .map((row) => row.querySelectorAll('[role="cell"]')[idx]?.textContent?.trim() ?? '')
+          .map((row) => row.querySelectorAll('[role="cell"]')[targetColumnIndex]?.textContent?.trim() ?? '')
           .filter(Boolean),
       columnIndex
     );
   }
 
   async navigate() {
-    await this.clickOnElement(this.adminLink);
-    await WaitUtils.waitForHidden(this.loader);
-    await WaitUtils.waitForVisible(this.tableBody);
-  }
+    // Opens baseURL
+    if (!this.page.url().includes('orangehrmlive.com')) {
+      await this.openWebsite('/');
+      await WaitUtils.waitForHidden(this.loader);
+    }
 
-  async openDirect() {
-    await this.page.goto('/web/index.php/admin/viewSystemUsers');
+    // Navigate step-by-step via the Admin sidebar menu
+    if (!this.page.url().includes('/admin/viewSystemUsers')) {
+      await this.clickOnElement(this.adminLink);
+    }
+
     await WaitUtils.waitForHidden(this.loader);
     await WaitUtils.waitForVisible(this.tableBody);
     await expect(this.tableCards.first().or(this.noRecordsLabel)).toBeVisible();
@@ -158,7 +163,7 @@ export class AdminUserPage extends PlaywrightActions {
   async ensureOnListPage() {
     await WaitUtils.waitForHidden(this.loader);
     if (!this.page.url().includes('/admin/viewSystemUsers') || !(await this.addBtn.isVisible())) {
-      await this.openDirect();
+      await this.navigate();
     }
   }
 
@@ -181,7 +186,7 @@ export class AdminUserPage extends PlaywrightActions {
     await this.ensureOnListPage();
     await WaitUtils.waitForVisible(this.tableCards.first());
     const usernames = await this.getColumnTexts('Username');
-    return AdminUserPage.pickRandom(usernames) || 'Admin';
+    return this.pickRandom(usernames) || 'Admin';
   }
 
   async openAddForm() {
@@ -193,8 +198,7 @@ export class AdminUserPage extends PlaywrightActions {
 
   async openEditForm(username: string) {
     await this.searchUser(username);
-    const row = this.getUserRow(username);
-    await this.clickOnElement(row.locator('.bi-pencil-fill'));
+    await this.clickOnElement(this.editRowBtn(username));
     await WaitUtils.waitForHidden(this.loader);
     await AssertUtils.visible(this.saveBtn);
     await expect(this.usernameInput).toHaveValue(username);
@@ -210,20 +214,20 @@ export class AdminUserPage extends PlaywrightActions {
     await WaitUtils.waitForVisible(this.tableBody);
   }
 
-  async fillForm(data: UserPayload) {
-    if (data.userRole) await this.selectCustomDropdown(this.roleSelect, data.userRole);
-    if (data.employeeSearchText) await this.selectExistingEmployee(data.employeeSearchText);
-    if (data.rawEmployee !== undefined) await this.enterText(this.empInput, data.rawEmployee);
-    if (data.status) await this.selectCustomDropdown(this.statusSelect, data.status);
-    if (data.username !== undefined) await this.enterText(this.usernameInput, data.username);
+  async fillForm(userData: UserPayload) {
+    if (userData.userRole) await this.selectCustomDropdown(this.roleSelect, userData.userRole);
+    if (userData.employeeSearchText) await this.selectExistingEmployee(userData.employeeSearchText);
+    if (userData.rawEmployee !== undefined) await this.enterText(this.empInput, userData.rawEmployee);
+    if (userData.status) await this.selectCustomDropdown(this.statusSelect, userData.status);
+    if (userData.username !== undefined) await this.enterText(this.usernameInput, userData.username);
 
-    if (data.enableChangePassword) {
+    if (userData.enableChangePassword) {
       await this.clickOnElement(this.changePasswordCheckbox);
       await WaitUtils.waitForVisible(this.passwordInput);
     }
 
-    if (data.password !== undefined) await this.enterText(this.passwordInput, data.password);
-    if (data.confirmPassword !== undefined) await this.enterText(this.confirmInput, data.confirmPassword);
+    if (userData.password !== undefined) await this.enterText(this.passwordInput, userData.password);
+    if (userData.confirmPassword !== undefined) await this.enterText(this.confirmInput, userData.confirmPassword);
   }
 
   // =========================================================================
@@ -231,44 +235,43 @@ export class AdminUserPage extends PlaywrightActions {
   // =========================================================================
 
   async addUser(customData?: Partial<UserPayload>): Promise<CreatedUser> {
-    const data = this.getUserData();
-    const role = customData?.userRole ?? AdminUserPage.pickRandom([data.roles.admin, data.roles.ess]);
-    const status = customData?.status ?? data.statuses.enabled;
-    const username = customData?.username ?? this.randomStringGenerator('test_add');
-    const password = customData?.password ?? this.dynamicPassword();
+    const defaultUserData = this.getUserData();
+    const role = customData?.userRole ?? this.pickRandom([defaultUserData.roles.admin, defaultUserData.roles.ess]);
+    const status = customData?.status ?? defaultUserData.statuses.enabled;
+    const randomSuffix = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 5);
+    const username = customData?.username ?? `test_add_${randomSuffix}`;
+const password = customData?.password ?? this.dynamicPassword();
+await this.openAddForm();
+await this.fillForm({
+userRole: role,
+employeeSearchText: customData?.employeeSearchText ?? 'a',
+status,
+username,
+password,
+confirmPassword: customData?.confirmPassword ?? password,
+});
+await this.saveForm();
+await AssertUtils.visible(this.toastSuccess);
+await WaitUtils.waitForHidden(this.loader);
+await WaitUtils.waitForVisible(this.tableBody);
+return { username, password, role, status };
+}
+async searchUser(username: string) {
+await this.ensureSearchFiltersExpanded();
+await this.enterText(this.searchUserInput, username);
+await this.clickOnElement(this.searchBtn);
+await WaitUtils.waitForHidden(this.loader);
+}
+async editUser(existingUser: CreatedUser, updates?: Partial<UserPayload>): Promise<CreatedUser> {
 
-    await this.openAddForm();
-    await this.fillForm({
-      userRole: role,
-      employeeSearchText: customData?.employeeSearchText ?? 'a',
-      status,
-      username,
-      password,
-      confirmPassword: customData?.confirmPassword ?? password,
-    });
-    await this.saveForm();
-
-    await AssertUtils.visible(this.toastSuccess);
-    await WaitUtils.waitForHidden(this.loader);
-    await WaitUtils.waitForVisible(this.tableBody);
-
-    return { username, password, role, status };
-  }
-
-  async searchUser(username: string) {
-    await this.ensureSearchFiltersExpanded();
-    await this.enterText(this.searchUserInput, username);
-    await this.clickOnElement(this.searchBtn);
-    await WaitUtils.waitForHidden(this.loader);
-  }
-
-  async editUser(user: CreatedUser, updates?: Partial<UserPayload>): Promise<CreatedUser> {
-const data = this.getUserData();
-const newRole = updates?.userRole ?? (user.role === data.roles.admin ? data.roles.ess : data.roles.admin);
-const newStatus =
-updates?.status ?? (user.status === data.statuses.enabled ? data.statuses.disabled : data.statuses.enabled);
-const newUsername = updates?.username ?? this.randomStringGenerator('test_edit');
-await this.openEditForm(user.username);
+const { roles, statuses } = this.getUserData();
+const { admin, ess } = roles;
+const { enabled, disabled } = statuses;
+const newRole = updates?.userRole ?? (existingUser.role === admin ? ess : admin);
+const newStatus = updates?.status ?? (existingUser.status === enabled ? disabled : enabled);
+const randomSuffix = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 5);
+const newUsername = updates?.username ?? `test_edit_${randomSuffix}`;
+await this.openEditForm(existingUser.username);
 await this.fillForm({
 userRole: newRole,
 status: newStatus,
@@ -281,16 +284,15 @@ await WaitUtils.waitForHidden(this.loader);
 await WaitUtils.waitForVisible(this.tableBody);
 return {
 username: newUsername,
-password: updates?.password ?? user.password,
+password: updates?.password ?? existingUser.password,
 role: newRole,
 status: newStatus,
 };
 }
-async deleteUser(username: string, confirm = true) {
+async deleteUser(username: string, confirmDelete = true) {
 await this.searchUser(username);
-const row = this.getUserRow(username);
-await this.clickOnElement(row.locator('.bi-trash'));
-if (confirm) {
+await this.clickOnElement(this.deleteRowBtn(username));
+if (confirmDelete) {
 await this.clickOnElement(this.confirmDeleteBtn);
 await AssertUtils.visible(this.toastSuccess);
 await WaitUtils.waitForHidden(this.loader);
@@ -303,10 +305,10 @@ await this.clickOnElement(this.cancelDeleteBtn);
 // =========================================================================
 async verifyUserInList(username: string, expectedRole?: string, expectedStatus?: string) {
 await this.searchUser(username);
-const row = this.getUserRow(username);
-await AssertUtils.visible(row);
-if (expectedRole) await AssertUtils.containsText(row, expectedRole);
-if (expectedStatus) await AssertUtils.containsText(row, expectedStatus);
+const userRow = this.userRow(username);
+await AssertUtils.visible(userRow);
+if (expectedRole) await AssertUtils.containsText(userRow, expectedRole);
+if (expectedStatus) await AssertUtils.containsText(userRow, expectedStatus);
 }
 async verifyUserNotInList(username: string) {
 await this.searchUser(username);
@@ -319,7 +321,7 @@ async verifyFieldError(labelText: string, expectedMessage: string) {
 await AssertUtils.containsText(this.fieldError(labelText), expectedMessage);
 }
 async validateMandatoryFields() {
-const data = this.getUserData();
+const validationData = this.getUserData();
 await this.openAddForm();
 await this.passwordInput.fill('a');
 await this.passwordInput.fill('');
@@ -327,83 +329,84 @@ await this.confirmInput.fill('a');
 await this.confirmInput.fill('');
 await this.confirmInput.blur();
 await this.saveForm();
-await this.verifyErrorCount(data.mandatoryFieldLabels.length);
-for (const label of data.mandatoryFieldLabels) {
-const expectedMsg =
-label === 'Confirm Password'
-? data.validationMessages.confirmPasswordRequired
-: data.validationMessages.required;
-await this.verifyFieldError(label, expectedMsg);
+await this.verifyErrorCount(validationData.mandatoryFieldLabels.length);
+for (const fieldLabel of validationData.mandatoryFieldLabels) {
+const expectedMessage =
+fieldLabel === 'Confirm Password'
+? validationData.validationMessages.confirmPasswordRequired
+: validationData.validationMessages.required;
+await this.verifyFieldError(fieldLabel, expectedMessage);
 }
 }
 async validateInvalidInputs(existingUsername: string) {
-const data = this.getUserData();
+const validationData = this.getUserData();
 await this.openAddForm();
-const scenarios: { payload: UserPayload; checks: { label: string; msg: string }[] }[] = [
+const invalidEmployeeSuffix = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 5);
+const invalidScenarios: { payload: UserPayload; checks: { label: string; message: string }[] }[] = [
 {
 payload: {
-rawEmployee: this.randomStringGenerator('invalid'),
+rawEmployee: `invalid_${invalidEmployeeSuffix}`,
 username: 'usr',
 password: 'pass1',
 confirmPassword: this.dynamicPassword(),
 },
 checks: [
-{ label: 'Employee Name', msg: data.validationMessages.invalidEmployee },
-{ label: 'Username', msg: data.validationMessages.minUsername },
-{ label: 'Password', msg: data.validationMessages.minPassword },
-{ label: 'Confirm Password', msg: data.validationMessages.passwordMismatch },
+{ label: 'Employee Name', message: validationData.validationMessages.invalidEmployee },
+{ label: 'Username', message: validationData.validationMessages.minUsername },
+{ label: 'Password', message: validationData.validationMessages.minPassword },
+{ label: 'Confirm Password', message: validationData.validationMessages.passwordMismatch },
 ],
 },
 {
-payload: { password: this.randomStringGenerator('PASS').toUpperCase() + '1' },
-checks: [{ label: 'Password', msg: data.validationMessages.missingLowercasePassword }],
+payload: { password: PlaywrightActions.generateRandom('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6) + '1' },
+checks: [{ label: 'Password', message: validationData.validationMessages.missingLowercasePassword }],
 },
 {
-payload: { password: this.randomStringGenerator('TestPass').replace(/[0-9]/g, 'a') },
-checks: [{ label: 'Password', msg: data.validationMessages.missingNumberPassword }],
+payload: { password: PlaywrightActions.generateRandom('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz', 8) },
+checks: [{ label: 'Password', message: validationData.validationMessages.missingNumberPassword }],
 },
 {
 payload: { username: existingUsername },
-checks: [{ label: 'Username', msg: data.validationMessages.duplicateUsername }],
+checks: [{ label: 'Username', message: validationData.validationMessages.duplicateUsername }],
 },
 ];
-for (const s of scenarios) {
-await this.fillForm(s.payload);
+for (const scenario of invalidScenarios) {
+await this.fillForm(scenario.payload);
 await this.saveForm();
-for (const c of s.checks) {
-await this.verifyFieldError(c.label, c.msg);
+for (const validationCheck of scenario.checks) {
+await this.verifyFieldError(validationCheck.label, validationCheck.message);
 }
 }
 }
-async validateDuplicateEditAndMismatch(user: CreatedUser, existingUsername: string) {
-const data = this.getUserData();
-await this.openEditForm(user.username);
+async validateDuplicateEditAndMismatch(existingUser: CreatedUser, duplicateUsername: string) {
+const validationData = this.getUserData();
+await this.openEditForm(existingUser.username);
 await this.fillForm({
-username: existingUsername,
+username: duplicateUsername,
 enableChangePassword: true,
-password: user.password,
+password: existingUser.password,
 confirmPassword: this.dynamicPassword(),
 });
 await this.saveForm();
-await this.verifyFieldError('Username', data.validationMessages.duplicateUsername);
-await this.verifyFieldError('Confirm Password', data.validationMessages.passwordMismatch);
+await this.verifyFieldError('Username', validationData.validationMessages.duplicateUsername);
+await this.verifyFieldError('Confirm Password', validationData.validationMessages.passwordMismatch);
 await this.cancelForm();
 }
 // --- Sorting Helpers ---
-private async applySort(order: SortDirection): Promise<string[]> {
+private async applySort(sortOrder: SortDirection): Promise<string[]> {
 await this.clickOnElement(this.sortBtn);
 await WaitUtils.waitForDropdownVisible(this.sortDropdown);
-await this.clickOnElement(this.sortDropdown.getByText(order, { exact: true }));
+await this.clickOnElement(this.sortOption(sortOrder));
 await WaitUtils.waitForHidden(this.loader);
 return await this.getColumnTexts('Username');
 }
-async sortByUsername(order: SortDirection): Promise<string[]> {
+async sortByUsername(sortOrder: SortDirection): Promise<string[]> {
 await this.ensureOnListPage();
 const currentUsernames = await this.getColumnTexts('Username');
-if (AssertUtils.isSorted(currentUsernames, order)) {
-const oppositeOrder: SortDirection = order === 'Ascending' ? 'Descending' : 'Ascending';
+if (AssertUtils.isSorted(currentUsernames, sortOrder)) {
+const oppositeOrder: SortDirection = sortOrder === 'Ascending' ? 'Descending' : 'Ascending';
 await this.applySort(oppositeOrder);
 }
-return await this.applySort(order);
+return await this.applySort(sortOrder);
 }
 }

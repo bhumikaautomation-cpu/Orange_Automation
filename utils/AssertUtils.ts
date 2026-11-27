@@ -7,41 +7,46 @@ export class AssertUtils {
         await expect(locator).toBeVisible();
     }
 
-    static async exactText(locator: Locator, text: string) {
-        await expect(locator).toHaveText(text);
+    static async exactText(locator: Locator, expectedText: string) {
+        await expect(locator).toHaveText(expectedText);
     }
 
-    static async containsText(locator: Locator, text: string) {
-        await expect(locator).toContainText(text);
+    static async containsText(locator: Locator, expectedSubstring: string) {
+        await expect(locator).toContainText(expectedSubstring);
     }
 
-    static async count(locator: Locator, expected: number) {
-        await expect(locator).toHaveCount(expected);
+    static async count(locator: Locator, expectedCount: number) {
+        await expect(locator).toHaveCount(expectedCount);
     }
 
     // Matches OrangeHRM's MySQL case-insensitive character-code sorting (0-9 -> A-Z -> _)
-    private static compare(a: string, b: string, direction: SortDirection): number {
-        const valA = a.trim().toUpperCase();
-        const valB = b.trim().toUpperCase();
+    private static compare(firstValue: string, secondValue: string, direction: SortDirection): number {
+        const normalizedFirstValue = firstValue.trim().toUpperCase();
+        const normalizedSecondValue = secondValue.trim().toUpperCase();
 
-        let result = 0;
-        if (valA < valB) result = -1;
-        else if (valA > valB) result = 1;
+        let comparisonOrder = 0;
+        if (normalizedFirstValue < normalizedSecondValue) comparisonOrder = -1;
+        else if (normalizedFirstValue > normalizedSecondValue) comparisonOrder = 1;
 
-        return direction === 'Ascending' ? result : -result;
+        return direction === 'Ascending' ? comparisonOrder : -comparisonOrder;
     }
 
     static isSorted(items: string[], direction: SortDirection): boolean {
-        for (let i = 0; i < items.length - 1; i++) {
-            if (this.compare(items[i], items[i + 1], direction) > 0) {
+        for (let index = 0; index < items.length - 1; index++) {
+            const currentItem = items[index];
+            const nextItem = items[index + 1];
+
+            if (this.compare(currentItem, nextItem, direction) > 0) {
                 return false;
             }
         }
         return true;
     }
 
-    static verifySorted(items: string[], direction: SortDirection) {
-        const expected = [...items].sort((a, b) => this.compare(a, b, direction));
-        expect(items, `Expected items to be sorted in ${direction} order`).toEqual(expected);
+    static verifySorted(actualItems: string[], direction: SortDirection) {
+        const expectedSortedItems = [...actualItems].sort((firstItem, secondItem) =>
+            this.compare(firstItem, secondItem, direction)
+        );
+        expect(actualItems, `Expected items to be sorted in ${direction} order`).toEqual(expectedSortedItems);
     }
 }

@@ -57,7 +57,10 @@ export class PlaywrightActions {
     async getAttributeValue(locatorValue: string | Locator, attributeName: string): Promise<string | null> {
         return await this.findLocator(locatorValue).getAttribute(attributeName);
     }
-
+    // Pick a random item from any array
+    pickRandom<T>(items: T[]): T {
+        return items[Math.floor(Math.random() * items.length)]!;
+    }
     // Reusable random generator for any character set and length
     static generateRandom(chars: string, length: number): string {
         let result = '';
@@ -67,12 +70,11 @@ export class PlaywrightActions {
         return result;
     }
 
-    // Existing method now reuses generateRandom (keeps old tests working!)
+       // Existing method now reuses generateRandom (keeps old tests working!)
     randomStringGenerator(text: string): string {
         const randomPart = PlaywrightActions.generateRandom('abcdefghijklmnopqrstuvwxyz', 5);
         return `${text}_${randomPart}`;
     }
-
 
 
     getUserData() {
